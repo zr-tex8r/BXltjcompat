@@ -1,0 +1,333 @@
+% bxltjcompat.sty
+
+%% package declaration
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{bxltjcompat}[2016/06/12 v0.1]
+\def\bxljc@pkgname{bxltjcompat}
+
+%======================================= environment check
+
+\RequirePackage{ifluatex}
+\ifluatex\else
+  \PackageError\bxljc@pkgname
+   {This package requires LuaTeX}%
+   {Package loading is aborted. \@ehc}
+\expandafter\endinput\fi\relax
+
+\ifnum\directlua{tex.write(pcall(function()
+  tex.enableprimitives('', tex.extraprimitives())
+  require("lualibs")
+  if not (type(token and token.put_next) == "function") then
+    error()
+  end
+end) and 1 or 0)}=\z@
+  \PackageError\bxljc@pkgname
+   {Failure in start-up.\MessageBreak
+    Perhaps the LuaTeX engine is too old}%
+   {LuaTeX of version 0.95 or later is needed.\MessageBreak
+    Package loading is aborted. \@ehc}
+\expandafter\endinput\fi\relax
+
+%======================================= helpers
+
+%% packages
+\RequirePackage{luatexja}
+\RequirePackage{calc}
+\RequirePackage{etoolbox}
+
+%% variables
+\let\bxljc@gtmpa\relax
+
+%% unique tokens
+\def\bxljc@end{\bxljc@end@}
+\def\bxljc@mt{\bxljc@mt@}
+
+%% \bxljc@decl@luafunc\CS{<lua-code>}
+\def\bxljc@decl@luafunc#1{%
+  \expandafter\bxljc@decl@luafunc@a\csname bxljc@LF@@\csstring#1\endcsname#1}
+\def\bxljc@decl@luafunc@a#1#2#3{%
+  \newluafunction#1\gdef#2{\luafunction#1}%
+  \directlua{lua.get_functions_table()[\the#1] = function()#3end}}
+
+%% \bxljc@trueQ
+\def\bxljc@trueQ{\dimexpr1trueQ\relax}
+
+%======================================= magic length variables
+
+%%<+> \DeclareMagicLength\CSlen\CSset{<getter-luacode>}
+\newcommand*{\DeclareMagicLength}[1]{%
+  \expandafter\bxljc@decl@magiclen\csname bxljc@ML@@\csstring#1\endcsname#1}
+\def\bxljc@decl@magiclen#1#2#3#4{%
+  \newlength{#1}\def#2{\bxljc@Lua@magic@length#1#3}%
+  \directlua{
+    bxltjcompat.magic_length_getter(function() #4 end)
+  }#1}
+\bxljc@decl@luafunc\bxljc@Lua@magic@length{%
+  bxltjcompat.magic_length()}
+
+%======================================= magic length variables
+
+%% \kamjiskip / \autospacing / \noautospacing
+\unless\ifdefined\kanjiskip
+\unless\ifdefined\autospacing
+\unless\ifdefined\noautospacing
+  \newcount\bxljc@autospacing \bxljc@autospacing\@ne
+  \protected\def\autospacing{\bxljc@autospacing\@ne\bxljc@set@kanjiskip}
+  \protected\def\noautospacing{\bxljc@autospacing\z@\bxljc@set@kanjiskip}
+  \AtEndOfPackage{%
+    \DeclareMagicLength\kanjiskip\bxljc@set@kanjiskip{%
+      return bxltjcompat.ltj_kanjiskip('kanjiskip', 'bxljc@autospacing')}%
+    \bxljc@ML@@kanjiskip=\ltjgetparameter{kanjiskip}\relax}
+  \protected\def\bxljc@set@kanjiskip{%
+    \ltjsetparameter{kanjiskip=%
+      \ifnum\bxljc@autospacing>\z@ \bxljc@ML@@kanjiskip \else \z@ \fi}}
+\fi\fi\fi
+
+%% \xkanjiskip / \autoxspacing / \noautoxspacing
+\unless\ifdefined\xkanjiskip
+\unless\ifdefined\autoxspacing
+\unless\ifdefined\noautoxspacing
+  \newcount\bxljc@autoxspacing \bxljc@autoxspacing\@ne
+  \protected\def\autoxspacing{\bxljc@autoxspacing\@ne\bxljc@set@xkanjiskip}
+  \protected\def\noautoxspacing{\bxljc@autoxspacing\z@\bxljc@set@xkanjiskip}
+  \AtEndOfPackage{%
+    \DeclareMagicLength\xkanjiskip\bxljc@set@xkanjiskip{%
+      return bxltjcompat.ltj_kanjiskip('xkanjiskip', 'bxljc@autoxspacing')}%
+    \bxljc@ML@@xkanjiskip=\ltjgetparameter{xkanjiskip}\relax}
+  \protected\def\bxljc@set@xkanjiskip{%
+    \ltjsetparameter{xkanjiskip=%
+      \ifnum\bxljc@autoxspacing>\z@ \bxljc@ML@@xkanjiskip \else \z@ \fi}}
+\fi\fi\fi
+
+%% \ybaselineshift
+\unless\ifdefined\ybaselineshift
+  \AtEndOfPackage{%
+    \DeclareMagicLength\ybaselineshift\bxljc@set@ybaselineshift{%
+      return bxltjcompat.ltj_length_param('yalbaselineshift')}%
+    \bxljc@ML@@ybaselineshift=\ltjgetparameter{yalbaselineshift}\relax}
+  \protected\def\bxljc@set@ybaselineshift{%
+    \ltjsetparameter{yalbaselineshift=\bxljc@ML@@xkanjiskip}}
+\fi
+
+%% \tbaselineshift
+\unless\ifdefined\tbaselineshift
+  \AtEndOfPackage{%
+    \DeclareMagicLength\tbaselineshift\bxljc@set@tbaselineshift{%
+      return bxltjcompat.ltj_length_param('talbaselineshift')}%
+    \bxljc@ML@@tbaselineshift=\ltjgetparameter{talbaselineshift}\relax}
+  \protected\def\bxljc@set@tbaselineshift{%
+    \ltjsetparameter{talbaselineshift=\bxljc@ML@@xkanjiskip}}
+\fi
+
+%======================================= parse length expression
+
+%%<+> \AddLenExprReplace{<from>}{<to>}{<case-sensitive?>}
+\newcommand*\AddLenExprReplace{%
+  \bxljc@Lua@add@lenexpr@replace}
+\bxljc@decl@luafunc\bxljc@Lua@add@lenexpr@replace{%
+  bxltjcompat.add_lenexpr_replace()}
+
+%% patch to calc commands
+\letcs\bxljc@org@setlength{setlength }
+\letcs\bxljc@org@addtolength{addtolength }
+\csdef{setlength }{%
+  \bxljc@pp@setlength\bxljc@org@setlength}
+\csdef{addtolength }{%
+  \bxljc@pp@setlength\bxljc@org@addtolength}
+
+%% \bxljc@pp@setlength\CONT{<variable>}{<expression>}
+\def\bxljc@pp@setlength#1#2#3{%
+  \bxljc@calc@edef\bxljc@lenexpr{#3}%
+  \bxljc@parse@lenexpr
+  #1#2{\bxljc@lenexpr}}
+
+%% \bxljc@calc@edef\CS{<expression>}
+\def\bxljc@calc@edef#1#2{%
+  \begingroup
+    \let\real\relax \let\ratio\relax
+    \let\widthof\relax \let\totalheightof\relax
+    \let\heightof\relax \let\depthof\relax
+    \let\maxof\relax \let\minof\relax
+    \xdef\bxljc@gtmpa{#2}%
+  \endgroup
+  \let#1\bxljc@gtmpa}
+
+%% \bxljc@parse@lenexpr
+\def\bxljc@parse@lenexpr{%
+  \expandafter\bxljc@parse@lenexpr@a\bxljc@lenexpr\bxljc@end}
+\def\bxljc@parse@lenexpr@a#1\bxljc@end{%
+  \bxljc@Lua@parse@lenexpr\bxljc@parse@lenexpr@b{#1}}
+\def\bxljc@parse@lenexpr@b#1{%
+  \def\bxljc@lenexpr{#1}}
+\bxljc@decl@luafunc\bxljc@Lua@parse@lenexpr{%
+  bxltjcompat.parse_lenexpr()}
+
+%======================================= Lua code
+
+\begingroup
+\escapechar\m@ne
+\def\\{\string\\}\def\%{\string\%}
+\endlinechar10 \catcode10=12 \directlua{
+  local M = {}; bxltjcompat = M
+  local token, table, utf = token, table, utf
+  local unpack = unpack or table.unpack
+
+  ------------------------------ token something
+
+  local tok = token.create
+  local get_tok = token.get_next
+  local get_string = token.scan_string
+  local put_toks = token.put_next
+  local function get_group()
+    return token.scan_toks(false, false)
+  end
+
+  local CS = 92
+  local function bgroup() return tok(123, 1) end
+  local function egroup() return tok(125, 2) end
+  local function cc_to_tok(cc) return tok(cc, 12) end
+  local function tok_to_cc(t)
+    return (t.command == 11 or t.command == 12) and t.mode or CS
+  end
+  local function toks_to_str(...)
+    local t = { unpack(...) }
+    for i = 1, #t do
+      t[i] = utf.char(tok_to_cc(t[i]))
+    end
+    return table.concat(t)
+  end
+  local function str_to_toks(s, p, ...)
+    local s2, t = utf.sub(s, p or 1, ...), {}
+    for cc in utf.values(s2) do
+      table.insert(t, cc_to_tok(cc))
+    end
+    return t
+  end
+
+  ------------------------------ parse length expression
+
+  local lx_repl, lx_trigger, lx_rml = {}, {}, 0
+
+  function M.add_lenexpr_replace()
+    local from, to, cs = get_string(), get_group()
+    local cs = toboolean(get_string())
+    table.insert(lx_repl, { from=from, to=to, cs=cs })
+    table.sort(lx_repl, function (x, y)
+      return x.from > y.from
+    end)
+    for _, x in ipairs(lx_repl) do
+      local c = x.from:sub(1, 1)
+      lx_rml = math.max(lx_rml, #x.from)
+      if cs then
+        lx_trigger[string.byte(c)] = true
+      else
+        lx_trigger[string.byte(c:upper())] = true
+        lx_trigger[string.byte(c:lower())] = true
+      end
+    end
+  end
+
+  local function is_alpha(cc)
+    return (65 <= cc and cc <= 90) or (97 <= cc and cc <= 122)
+  end
+
+  local function streql(x, y, cs)
+    return (x == y) or (not cs and x:lower() == y:lower())
+  end
+
+  function M.parse_lenexpr()
+    local cont, expr = get_tok(), get_group()
+    local rtok, pos, inword = {}, 1, false
+    while pos <= #expr do
+      local tok = expr[pos]
+      local cc, rt = tok_to_cc(tok), { tok }
+      if not inword and lx_trigger[cc] then
+        local ahead = toks_to_str(expr, pos, pos + lx_rml)
+        for _, e in ipairs(lx_repl) do
+          if streql(ahead:sub(1, #e.from), e.from, e.cs) then
+            rt = e.to; pos = pos - 1 + #e.from; break
+          end
+        end
+      end
+      table.append(rtok, rt)
+      pos = pos + 1; inword = is_alpha(cc)
+    end
+    put_toks(table.imerged({ cont, bgroup() }, rtok, { egroup() }))
+  end
+
+  ------------------------------ magic-length
+
+  local magic_trigger = "calc@B"
+  local ml_getter = {}
+
+  function M.magic_length_getter(getter)
+    local var = get_tok()
+    if not var.csname then return end
+    ml_getter[var.csname] = getter
+  end
+
+  function M.magic_length()
+    local var, setter, peek = get_tok(), get_tok(), get_tok()
+    if peek.csname == magic_trigger then -- set (ie. in \setlength)
+      -- call setter after assignment
+      put_toks({ var, peek, setter })
+    else -- get
+      if var.csname and ml_getter[var.csname] then
+        local val = ml_getter[var.csname]()
+        if val then tex.skip[var.csname] = val end
+      end
+      put_toks({ var, peek })
+    end
+  end
+
+  ------------------------------ luatexja parameters
+
+  local glue_spec = node.id("glue_spec")
+  local function to_glue_spec(str)
+    local f = tostring(str):explode(" ")
+    local g = node.new(glue_spec); g.width = tex.sp(f[1])
+    for i = 2, 4, 2 do
+      if not f[i] then break end
+      local v, o = f[i + 1], 0; local s, e = v:find("fil*")
+      if s then v, o = v:sub(1, s - 1).."pt", e - s end
+      if f[i] == "plus" then g.stretch, g.stretch_order = tex.sp(v), o end
+      if f[i] == "minus" then g.shrink, g.shrink_order = tex.sp(v), o end
+    end
+    return g
+  end
+
+  local unary_pars = luatexja.unary_pars
+  local function get_ltj_param_value(key)
+    if not unary_pars[key] then return end
+    return tostring(unary_pars[key](tex.getcount('ltj@@stack')))
+  end
+
+  function M.ltj_length_param(key)
+    local vs = get_ltj_param_value(key)
+    return vs and to_glue_spec(vs)
+  end
+
+  function M.ltj_kanjiskip(key, sw)
+    local vs = get_ltj_param_value(key)
+    if vs == "0.0pt" and tex.count[sw] == 0 then
+      return
+    else
+      tex.count[sw] = 1
+      return vs and to_glue_spec(vs)
+    end
+  end
+}%
+\endgroup%
+
+%======================================= initial setup
+
+\AddLenExprReplace{zw}{\zw}{false}
+\AddLenExprReplace{zh}{\zh}{false}
+\AddLenExprReplace{Q}{\jQ}{true}
+\AddLenExprReplace{H}{\jH}{true}
+\AddLenExprReplace{trueQ}{\bxljc@trueQ}{true}
+\AddLenExprReplace{trueH}{\bxljc@trueQ}{true}
+
+%======================================= all done
+\endinput
+%% EOF
