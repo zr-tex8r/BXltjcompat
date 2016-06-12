@@ -2,7 +2,7 @@
 
 %% package declaration
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{bxltjcompat}[2016/06/12 v0.1]
+\ProvidesPackage{bxltjcompat}[2016/06/12 v0.2]
 \def\bxljc@pkgname{bxltjcompat}
 
 %======================================= environment check
@@ -167,6 +167,7 @@ end) and 1 or 0)}=\z@
 \begingroup
 \escapechar\m@ne
 \def\\{\string\\}\def\%{\string\%}
+\catcode`\#=12
 \endlinechar10 \catcode10=12 \directlua{
   local M = {}; bxltjcompat = M
   local token, table, utf = token, table, utf
@@ -268,7 +269,7 @@ end) and 1 or 0)}=\z@
 
   function M.magic_length()
     local var, setter, peek = get_tok(), get_tok(), get_tok()
-    if peek.csname == magic_trigger then -- set (ie. in \setlength)
+    if peek.csname == magic_trigger then -- set (ie. in \\setlength)
       -- call setter after assignment
       put_toks({ var, peek, setter })
     else -- get
